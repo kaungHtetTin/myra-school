@@ -10,7 +10,7 @@
 </head>
 <body>
 <nav class="print-toolbar" aria-label="Invoice actions">
-    <a href="<?= e(url('fees')) ?>">← Fees & payments</a>
+    <a href="<?= e(url('fees')) ?>">← Enrollment receipts</a>
     <span>A4 portrait · Print or save as PDF</span>
     <button type="button" data-print>Print invoice</button>
 </nav>
@@ -20,7 +20,7 @@
         <div class="invoice-title"><p>SCHOOL FEE INVOICE</p><h2><?= e($number) ?></h2><span class="invoice-status"><?= e($status) ?></span></div>
     </header>
     <section class="invoice-details" aria-label="Student and invoice details">
-        <div><h3>Student details</h3><strong><?= e($invoice['name']) ?></strong><dl><dt>Student ID</dt><dd><?= e($invoice['admission_no']) ?></dd><dt>Class</dt><dd><?= e($invoice['class_name']) ?></dd><dt>Guardian</dt><dd><?= e($invoice['guardian']) ?></dd><dt>Contact</dt><dd><?= e($invoice['phone']) ?></dd></dl></div>
+        <div><h3>Student details</h3><strong><?= e($invoice['name']) ?></strong><dl><dt>Class</dt><dd><?= e($invoice['class_name']) ?></dd><?php if($invoice['guardian']): ?><dt>Guardian</dt><dd><?= e($invoice['guardian']) ?></dd><?php endif ?><dt>Contact</dt><dd><?= e($invoice['phone']) ?></dd></dl></div>
         <div><h3>Invoice details</h3><dl><dt>Invoice number</dt><dd><?= e($number) ?></dd><dt>Due date</dt><dd><?= e(date('d M Y', strtotime($invoice['due_date']))) ?></dd><dt>Printed on</dt><dd><?= e(date('d M Y, H:i')) ?></dd><dt>Currency</dt><dd><?= e(school()['currency']) ?></dd></dl></div>
     </section>
     <table class="invoice-items"><thead><tr><th scope="col">Description</th><th scope="col" class="amount">Amount</th></tr></thead><tbody><tr><td><?= e($invoice['description']) ?></td><td class="amount"><?= money($invoice['amount']) ?></td></tr></tbody></table>

@@ -29,3 +29,8 @@ function initials(string $name): string { $p = explode(' ', trim($name)); return
 function input(string $label, string $name, string $type = 'text', mixed $value = '', bool $required = true): void {
     echo '<label>'.e($label).'<input type="'.e($type).'" name="'.e($name).'" value="'.e(old($name,$value)).'" '.($required?'required':'').' '.($type==='text'?'maxlength="150"':'').'></label>';
 }
+function choose(string $label, string $name, array $options, mixed $value = ''): void {
+    echo '<label>'.e($label).'<select name="'.e($name).'" '.(in_array($name,['student_id','invoice_id','teacher_id'],true)?'data-searchable ':'').'required>';
+    foreach ($options as $key=>$text) echo '<option value="'.e($key).'" '.((string)old($name,$value)===(string)$key?'selected':'').'>'.e($text).'</option>';
+    echo '</select></label>';
+}

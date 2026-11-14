@@ -5,9 +5,26 @@ document.querySelectorAll('dialog').forEach(dialog => {
     dialog.addEventListener('click', event => { if (event.target === dialog) { const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close(); } });
 });
 document.querySelectorAll('[data-confirm]').forEach(form => form.addEventListener('submit', event => { if (!confirm(form.dataset.confirm)) event.preventDefault(); }));
-document.querySelector('[data-present]')?.addEventListener('click', () => document.querySelectorAll('.attendance-options input[value="Present"]').forEach(input => input.checked = true));
 document.querySelector('[data-menu]')?.addEventListener('click', () => document.querySelector('.sidebar').classList.toggle('is-open'));
-document.querySelectorAll('input[type="number"]').forEach(input => { input.min = '0'; input.step = ['amount','score','maximum'].includes(input.name) ? '0.01' : '1'; });
+document.querySelectorAll('input[type="number"]').forEach(input => { input.min = '0'; input.step = ['amount','fee'].includes(input.name) ? '0.01' : '1'; });
+
+document.querySelectorAll('[data-enrollment-form]').forEach(form => {
+    const foc = form.querySelector('[name="is_foc"]');
+    const amount = form.querySelector('[name="amount"]');
+    const method = form.querySelector('[name="method"]');
+    let paidAmount = amount.value;
+    function syncFoc() {
+        if (foc.checked) {
+            if (!amount.disabled) paidAmount = amount.value;
+            amount.value = '0';
+        } else if (amount.disabled) amount.value = paidAmount;
+        amount.disabled = foc.checked;
+        method.disabled = foc.checked;
+    }
+    foc.addEventListener('change', syncFoc);
+    form.addEventListener('reset', () => setTimeout(() => { amount.disabled = false; paidAmount = amount.value; syncFoc(); }, 0));
+    syncFoc();
+});
 document.querySelectorAll('[data-branding-upload]').forEach(input => {
     const preview = document.querySelector(`[data-branding-preview="${input.dataset.brandingUpload}"]`);
     const original = preview.src;

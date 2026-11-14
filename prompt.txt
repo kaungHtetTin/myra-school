@@ -1,0 +1,34 @@
+student column field 
+Name 
+Phone,
+Address
+Origin (Facebook, Tiktok, Telegram, phone, other)
+Account (link, phone)
+Student Id hide
+
+
+Class  fee
+
+finance book ထည့်မယ် 
+
+ဒါကထပ်ထည့်ချင်တဲ့ ဟာတွေ
+
+လုပ်ချင်တဲ့ ပုံစံက class တွေရှိမယ်
+class တွေအောက်မှာ batch တွေ ခွဲပြီးဖွင့်မယ်
+အဲ့ batch တွေကို student list နဲ့ တွဲမယ်
+
+Management system က
+Class -> Batch List -> Batch Detail
+
+Batch Detail မှာ
+Student ထည့်တာ, fee သွင်းတာ, အဲ့ဒါတွေ လုပ်မယ်
+
+Student တစ်ယောက်က class တစ်ခုထက်ပိုပြီးတော့လည်း တက်လို့ရနိုင်မယ်
+
+Student detail မှာ တက်ခဲ့ဖူးတဲ့ class တွေကို fee သွင်းထားတဲ့ ့history တွေ 
+စတဲ့ လိုအပ်တဲ့အချက်အလက် အကုန်ထည့်မယ်
+
+
+Mini Finance Book တစ်ခုထည့်မယ်
+income / outcome နဲ့ profit တွေ တွက်ပေးမယ်
+

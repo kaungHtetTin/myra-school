@@ -1,0 +1,18 @@
+/* Reuse the native input rules and control-height token; only add the dropdown. */
+.search-select { display: block; position: relative; width: 100%; min-width: 0; }
+.search-select > input { display: block; width: 100%; padding-right: 30px; text-overflow: ellipsis; }
+.search-select > select[hidden], .search-select-popup[hidden] { display: none; }
+.search-select-arrow { position: absolute; right: 12px; top: 50%; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-70%) rotate(45deg); color: var(--muted); pointer-events: none; }
+.filters > .search-select-filter { width: 150px; flex-shrink: 0; }
+.filters > label > .search-select { margin-top: 2px; }
+.search-select-popup { position: fixed; inset: auto; margin: 0; padding: 4px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid #dfe5da; border-radius: 5px; background: #fff; color: #607259; box-shadow: 0 8px 24px #1e392924; z-index: 100; font: 11px 'DM Sans',system-ui,sans-serif; font-weight: 400; line-height: 1.5; }
+.search-select-option { padding: 7px 8px; border-radius: 3px; cursor: pointer; overflow-wrap: anywhere; }
+.search-select-option[aria-selected="true"] { color: var(--green); font-weight: 600; }
+.search-select-option.is-active { background: var(--mint); color: var(--deep); }
+.search-select-message { padding: 8px; color: var(--muted); font-size: 10px; }
+[data-theme="dark"] .search-select-popup { background: #18271e; color: #dce6db; border-color: #435a48; box-shadow: 0 8px 24px #07130d66; }
+[data-theme="dark"] .search-select-option[aria-selected="true"], [data-theme="dark"] .search-select-option.is-active { color: #c1dfae; }
+@media (max-width: 650px) {
+    .filters > .search-select-filter { width: calc(50% - 6px); }
+    .search-select-popup { font-size: 12px; }
+}

@@ -1,0 +1,11 @@
+.receipt-filters { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: start; gap: 12px; padding: 10px var(--panel-padding); border-block: 1px solid var(--border); }
+.receipt-filter-scroll { min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; padding: 2px 4px 12px; }
+.receipt-filter-fields { display: flex; align-items: end; gap: 8px; width: max-content; min-width: 100%; }
+.receipt-filter-fields > label { flex: 0 0 150px; width: 150px; gap: 2px; font-size: 11px; line-height: 17px; }
+.receipt-filter-fields > .receipt-filter-search { flex: 1 0 220px; }
+.receipt-filter-fields > .receipt-filter-date { flex-basis: 142px; width: 142px; }
+.receipt-filter-fields input, .receipt-filter-fields select { height: var(--control-height); width: 100%; }
+.receipt-filter-actions { display: flex; align-items: end; gap: 8px; padding-top: 21px; }
+.receipt-filter-error { padding: 10px var(--panel-padding); color: #b05743; font-size: 12px; }
+[data-theme="dark"] .receipt-filter-error { color: #f0b6a6; }
+@media (max-width: 650px) { .receipt-filters { grid-template-columns: minmax(0,1fr); gap: 0; } .receipt-filter-actions { padding-top: 0; } }

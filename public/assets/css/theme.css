@@ -41,11 +41,11 @@
 [data-theme="dark"] .button.primary { color: #fff; }
 [data-theme="dark"] input,
 [data-theme="dark"] select,
+[data-theme="dark"] .student-notes-field textarea,
 [data-theme="dark"] .branding-control input[type="file"] { background: #18271e; color: #dce6db; border-color: #435a48; }
 [data-theme="dark"] input::placeholder { color: #9eae9f; }
 [data-theme="dark"] label,
 [data-theme="dark"] .form-footer,
-[data-theme="dark"] .attendance-tools,
 [data-theme="dark"] .info-note,
 [data-theme="dark"] .table-footer,
 [data-theme="dark"] .footer { color: #a8b8a8; }
@@ -84,9 +84,6 @@
 [data-theme="dark"] .badge.success { background: #2c4530; color: #c1dfae; }
 [data-theme="dark"] .badge.warning { background: #473c25; color: #edcf8b; }
 [data-theme="dark"] .badge.danger { background: #4a302b; color: #f0b6a6; }
-[data-theme="dark"] .attendance-options span { border-color: #4b6049; color: #bfd0b7; }
-[data-theme="dark"] .attendance-options input:checked + span { background: #345234; border-color: #83a56e; color: #d6edc1; }
-[data-theme="dark"] .attendance-options input[value="Absent"]:checked + span { background: #54362d; border-color: #be8b77; color: #f1c4b2; }
 [data-theme="dark"] .bar-track { background: #334334; }
 [data-theme="dark"] .avatar { background: #3b4d33; color: #d3dfb9; border-color: #26362b; box-shadow: 0 0 0 1px #43543c; }
 [data-theme="dark"] .hue-0 { background: #453e59; color: #d6c9f1; }
