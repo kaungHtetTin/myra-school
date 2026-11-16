@@ -101,7 +101,7 @@ try {
     [$code,$html]=request('invoices/'.$invoice.'/print'); check(!str_contains($html,'Separate activity fee') && !str_contains($html,'Bank transfer'),'Print invoice excludes other invoices and their payments');
     // Remove only the isolated fixture so original suite totals remain unchanged.
     DB::statement('DELETE FROM payments WHERE invoice_id=?',[$otherInvoice]); DB::statement('DELETE FROM invoices WHERE id=?',[$otherInvoice]);
-    [$code]=request('save/payment',array_replace($payment,['amount'=>'30000.26']),$token); check($code===404,'Separate payment creation is disabled');
+    [$code]=request('save/payment',array_replace($payment,['amount'=>'30000.26']),$token); check($code===404,'Legacy standalone payment endpoint remains disabled');
     [$code]=request('save/invoice',['student_id'=>$sid,'description'=>'Unwanted fee','amount'=>'1','due_date'=>date('Y-m-d')],$token); check($code===404,'Separate invoice creation is disabled');
     DB::insert('payments',array_replace($payment,['amount'=>'30000.25']));
     [$code,$html]=request('invoices/'.$invoice.'/print'); check(str_contains($html,'>Paid</span>') && str_contains($html,'0 MMK'),'Fully paid print invoice shows Paid and zero balance');
@@ -127,7 +127,7 @@ try {
     check(DB::fetchValue('SELECT SUM(amount) FROM payments WHERE invoice_id=?',[$englishInvoice])==='75000.25','Second class enrollment also records full payment automatically');
     $paymentCount=DB::fetchValue('SELECT COUNT(*) FROM payments');
     request('save/payment',['batch_id'=>$batch,'invoice_id'=>$englishInvoice,'amount'=>'1','paid_on'=>date('Y-m-d'),'method'=>'Cash'],$token);
-    check(DB::fetchValue('SELECT COUNT(*) FROM payments')==$paymentCount,'Removed payment endpoint cannot add extra income'); request('batches/'.$batch);
+    check(DB::fetchValue('SELECT COUNT(*) FROM payments')==$paymentCount,'Legacy payment endpoint cannot add extra income'); request('batches/'.$batch);
     [$code,$html]=request('students/'.$sid); check($code===200 && str_contains($html,'October tuition') && str_contains($html,'Evening') && str_contains($html,'75,000.25 MMK'),'Student detail shows all classes and their paid amounts');
     [$code,$html]=request('students?class='.$english); check($code===200 && str_contains($html,'Aye Chan Updated') && !str_contains($html,'Second Student'),'Student class filter uses multi-class enrollments');
     [$code,$html]=request('finance'); check($code===200 && str_contains($html,'175,001.25 MMK') && substr_count($html,'PAY-')==4,'All recorded fee payments counted exactly once as income');
@@ -153,11 +153,11 @@ try {
     $focEnrollment=DB::fetch('SELECT * FROM enrollments WHERE batch_id=? AND student_id=?',[$freeBatch,$second]);
     check((int)$focEnrollment['is_foc']===1 && DB::fetchValue('SELECT COUNT(*) FROM payments p JOIN invoices i ON i.id=p.invoice_id WHERE i.enrollment_id=?',[$focEnrollment['id']])==0,'FOC enrollment records no payment');
     [$code,$html]=request('finance'); check($code===200 && substr_count($html,'PAY-')==4 && str_contains($html,'180,001.75 MMK'),'FOC adds no finance income');
-    [$code,$html]=request('batches/'.$freeBatch); check($code===200 && str_contains($html,'FOC') && !str_contains($html,'Record payment'),'Batch shows FOC and removes separate payment form');
+    [$code,$html]=request('batches/'.$freeBatch); check($code===200 && str_contains($html,'FOC') && !str_contains($html,'Record payment'),'Batch shows FOC without an inline payment form');
     [$code,$html]=request('students/'.$second); check($code===200 && str_contains($html,'FOC'),'Student history clearly identifies FOC');
     $freeInvoice=(int)DB::fetchValue('SELECT id FROM invoices WHERE enrollment_id=?',[$focEnrollment['id']]);
     [$code,$html]=request('invoices/'.$freeInvoice.'/print'); check($code===200 && str_contains($html,'>FOC</span>'),'Printed receipt identifies FOC');
-    [$code,$html]=request('fees'); check($code===200 && !str_contains($html,'Record payment') && !str_contains($html,'Add invoice'),'Receipts are read-only with no separate invoice/payment forms');
+    [$code,$html]=request('fees'); check($code===200 && !str_contains($html,'Record payment') && !str_contains($html,'Add invoice'),'Receipts link to payments without inline invoice/payment forms');
     $before=DB::fetchValue('SELECT COUNT(*) FROM enrollments');
     request('learning/enrollment',array_replace($enrollment,['batch_id'=>$freeBatch,'enrolled_on'=>date('Y-m-d',strtotime('+1 day'))]),$token);
     check(DB::fetchValue('SELECT COUNT(*) FROM enrollments')==$before,'Future paid enrollment is rejected without income');
@@ -321,6 +321,70 @@ try {
     request('setup',['name'=>'Intruder','email'=>'new@example.test','password'=>'another-password'],$token); check(DB::fetchValue('SELECT COUNT(*) FROM users')==1,'Setup closes after first administrator');
     request('password',['current_password'=>'incorrect','password'=>'New-test-password-42','password_confirmation'=>'New-test-password-42'],$token); check(password_verify('Test-school-password-42',DB::fetchValue('SELECT password FROM users')),'Password change requires current password');
     request('password',['current_password'=>'Test-school-password-42','password'=>'New-test-password-42','password_confirmation'=>'New-test-password-42'],$token); check(password_verify('New-test-password-42',DB::fetchValue('SELECT password FROM users')),'Administrator password change persists');
+    // Deposit and installment workflow. Keep these fixtures after earlier reporting totals.
+    request('learning/batch',['class_id'=>$english,'name'=>'Installment course','capacity'=>10,'starts_on'=>date('Y-m-d'),'status'=>'Open'],$token);
+    $installmentBatch=(int)DB::fetchValue('SELECT MAX(id) FROM batches');
+    $yesterday=date('Y-m-d',strtotime('-1 day'));
+    $installmentEnrollment=['batch_id'=>$installmentBatch,'student_id'=>$second,'enrolled_on'=>$yesterday,'amount'=>'100000.75','deposit'=>'20000.25','due_date'=>date('Y-m-d',strtotime('+30 days')),'method'=>'Bank transfer'];
+    $beforeEnrollments=(int)DB::fetchValue('SELECT COUNT(*) FROM enrollments');
+    foreach(['100000.76','-1','1.001','invalid'] as $badDeposit) {
+        request('learning/enrollment',array_replace($installmentEnrollment,['deposit'=>$badDeposit]),$token);
+        check((int)DB::fetchValue('SELECT COUNT(*) FROM enrollments')===$beforeEnrollments,'Invalid deposit rolls back enrollment: '.$badDeposit);
+    }
+    $incomeBefore=(float)DB::fetchValue('SELECT SUM(amount) FROM payments');
+    request('learning/enrollment',$installmentEnrollment,$token);
+    $installmentInvoice=(int)DB::fetchValue('SELECT MAX(id) FROM invoices');
+    check(DB::fetchValue('SELECT amount FROM invoices WHERE id=?',[$installmentInvoice])==='100000.75','Deposit enrollment preserves the total course fee');
+    check(DB::fetchValue('SELECT SUM(amount) FROM payments WHERE invoice_id=?',[$installmentInvoice])==='20000.25','Only the deposit is recorded as initial income');
+    check(DB::fetchValue('SELECT is_foc FROM enrollments WHERE batch_id=? AND student_id=?',[$installmentBatch,$second])==0,'Deposit enrollment is chargeable');
+    [$code,$html]=request('batches/'.$installmentBatch);
+    check($code===200 && str_contains($html,'80,000.50 MMK') && str_contains($html,'Partial') && str_contains($html,'invoices/'.$installmentInvoice.'/payments'),'Batch shows the deposit, balance and installment action');
+    [$code,$html]=request('invoices/'.$installmentInvoice.'/print');
+    check($code===200 && str_contains($html,'80,000.50 MMK') && str_contains($html,'Partial'),'Printed invoice shows deposit and remaining balance');
+    function paymentFormToken(int $invoice): string {
+        [$code,$html]=request('invoices/'.$invoice.'/payments');
+        check($code===200 && str_contains($html,'Payment history'),'Invoice payment page renders');
+        if (!preg_match('/name="payment_token" value="([^"]+)"/',$html,$match)) throw new RuntimeException('Missing installment token');
+        return $match[1];
+    }
+    $installmentToken=paymentFormToken($installmentInvoice);
+    $staleToken=paymentFormToken($installmentInvoice);
+    $installment=['invoice_id'=>$installmentInvoice,'amount'=>'30000.25','paid_on'=>date('Y-m-d'),'method'=>'Mobile payment','payment_token'=>$installmentToken];
+    $beforePayments=(int)DB::fetchValue('SELECT COUNT(*) FROM payments');
+    [$code]=request('learning/payment',$installment,'invalid'); check($code===419,'Installments require CSRF protection');
+    foreach([
+        ['amount'=>'80000.51'],['amount'=>'0'],['amount'=>'-1'],['amount'=>'1.001'],['amount'=>['1']],
+        ['paid_on'=>date('Y-m-d',strtotime('+1 day'))],['paid_on'=>date('Y-m-d',strtotime('-2 days'))],
+        ['paid_on'=>'2026-02-30'],['method'=>'Unknown'],['payment_token'=>'invalid'],['invoice_id'=>$freeInvoice],
+    ] as $invalid) {
+        request('learning/payment',array_replace($installment,$invalid),$token);
+        check((int)DB::fetchValue('SELECT COUNT(*) FROM payments')===$beforePayments,'Invalid installment records no income: '.json_encode($invalid));
+    }
+    request('learning/payment',$installment,$token);
+    check(DB::fetchValue('SELECT SUM(amount) FROM payments WHERE invoice_id=?',[$installmentInvoice])==='50000.50','Second installment adds precisely to the deposit');
+    request('learning/payment',$installment,$token);
+    check((int)DB::fetchValue('SELECT COUNT(*) FROM payments')===$beforePayments+1,'Repeated payment submission does not duplicate income');
+    request('learning/payment',array_replace($installment,['payment_token'=>$staleToken,'amount'=>'80000.50']),$token);
+    check((int)DB::fetchValue('SELECT COUNT(*) FROM payments')===$beforePayments+1,'Stale payment form cannot overpay the latest balance');
+    request('learning/payment',array_replace($installment,['payment_token'=>$staleToken,'amount'=>'50000.25','method'=>'Cash']),$token);
+    check(DB::fetchValue('SELECT SUM(amount) FROM payments WHERE invoice_id=?',[$installmentInvoice])==='100000.75','Final installment settles the exact course fee');
+    [$code,$html]=request('invoices/'.$installmentInvoice.'/payments');
+    check($code===200 && str_contains($html,'fully paid') && !str_contains($html,'>Save payment<') && substr_count($html,'REC-')===3,'Settled payment page retains all three receipts and hides collection form');
+    [$code,$html]=request('invoices/'.$installmentInvoice.'/print');
+    check($code===200 && str_contains($html,'>Paid</span>') && substr_count($html,'REC-')===3,'Printed invoice includes every installment and Paid status');
+    check(abs((float)DB::fetchValue('SELECT SUM(amount) FROM payments')-$incomeBefore-100000.75)<0.001,'Installment income is counted once without duplicating the course fee');
+    request('learning/enrollment',array_replace($installmentEnrollment,['student_id'=>$third,'deposit'=>'0']),$token);
+    $unpaidInvoice=(int)DB::fetchValue('SELECT MAX(id) FROM invoices');
+    check(DB::fetchValue('SELECT is_foc FROM enrollments WHERE batch_id=? AND student_id=?',[$installmentBatch,$third])==0 && DB::fetchValue('SELECT COUNT(*) FROM payments WHERE invoice_id=?',[$unpaidInvoice])==0,'Zero deposit keeps a chargeable unpaid enrollment without income');
+    $unpaidToken=paymentFormToken($unpaidInvoice);
+    request('learning/payment',array_replace($installment,['invoice_id'=>$unpaidInvoice,'payment_token'=>$unpaidToken,'amount'=>'1.25']),$token);
+    check(DB::fetchValue('SELECT SUM(amount) FROM payments WHERE invoice_id=?',[$unpaidInvoice])==='1.25','Unpaid enrollment accepts its first installment later');
+    [$code,$html]=request('invoices/'.$freeInvoice.'/payments');
+    check($code===200 && str_contains($html,'FOC enrollment') && !str_contains($html,'>Save payment<'),'FOC invoice cannot collect installments');
+    foreach(['not-a-number','9999999999'] as $missing) { [$code]=request('invoices/'.$missing.'/payments'); check($code===404,'Invalid installment invoice returns 404: '.$missing); }
+    request('logout',[],$token);
+    [$code]=request('invoices/'.$installmentInvoice.'/payments'); check($code===302,'Payment history requires administrator sign-in');
+    [$code]=request('learning/payment',$installment,$token); check($code===302,'Recording installments requires administrator sign-in');
     echo "\n$checks integration checks passed.\n";
 } finally {
     if (is_resource($server)) { proc_terminate($server); proc_close($server); }

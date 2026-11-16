@@ -1,0 +1,14 @@
+<div class="page-heading"><div><a class="text-link" href="<?= e(url('students/'.$invoice['student_id'])) ?>">&larr; Student details</a><h1>Fee payments</h1><p><?= e($invoice['name']) ?> · <?= e($invoice['phone']) ?><br><?= e($invoice['description']) ?> · INV-<?= str_pad((string)$invoice['id'],4,'0',STR_PAD_LEFT) ?></p></div><a class="button" href="<?= e(url('invoices/'.$invoice['id'].'/print')) ?>" target="_blank" rel="noopener">Print A4</a></div>
+<div class="stats-grid three"><div class="stat-card"><span>Total fee</span><strong><?= $invoice['is_foc']?'FOC':money($invoice['amount']) ?></strong></div><div class="stat-card"><span>Total received</span><strong><?= money($paidCents/100) ?></strong></div><div class="stat-card"><span>Remaining balance</span><strong><?= money($balanceCents/100) ?></strong></div></div>
+<?php if(!$invoice['is_foc'] && $balanceCents>0): ?>
+<section class="panel"><div class="panel-heading"><div><h2>Add installment</h2><p>Due <?= e($invoice['due_date']) ?>. Each payment is added to finance income on its payment date.</p></div></div>
+<form method="post" action="<?= e(url('learning/payment')) ?>">
+    <?= csrf_field() ?><input type="hidden" name="invoice_id" value="<?= $invoice['id'] ?>"><input type="hidden" name="payment_token" value="<?= e($paymentToken) ?>">
+    <div class="form-grid"><label>Amount received<input type="number" name="amount" min="0.01" max="<?= e(number_format($balanceCents/100,2,'.','')) ?>" step="0.01" value="<?= e(old('amount',number_format($balanceCents/100,2,'.',''))) ?>" required></label><label>Payment date<input type="date" name="paid_on" value="<?= e(old('paid_on',date('Y-m-d'))) ?>" max="<?= date('Y-m-d') ?>" <?= $invoice['enrolled_on']?'min="'.e($invoice['enrolled_on']).'"':'' ?> required></label><?php choose('Payment method','method',['Cash'=>'Cash','Bank transfer'=>'Bank transfer','Mobile payment'=>'Mobile payment']); ?></div>
+    <div class="form-footer"><a class="button" href="<?= e(url('students/'.$invoice['student_id'])) ?>">Back to student</a><button class="button primary">Save payment</button></div>
+</form></section>
+<?php else: ?><div class="info-note"><?= $invoice['is_foc']?'FOC enrollment: no payment is required.':'This fee is fully paid.' ?></div><?php endif ?>
+<section class="panel section-gap"><div class="panel-heading"><h2>Payment history</h2></div><div class="table-wrap"><table><thead><tr><th>Receipt</th><th>Payment date</th><th>Method</th><th>Amount received</th></tr></thead><tbody>
+<?php foreach($payments as $payment): ?><tr><td>REC-<?= str_pad((string)$payment['id'],4,'0',STR_PAD_LEFT) ?></td><td><?= e($payment['paid_on']) ?></td><td><?= e($payment['method']) ?></td><td><?= money($payment['amount']) ?></td></tr><?php endforeach ?>
+<?php if(!$payments): ?><tr><td colspan="4" class="empty">No payments recorded yet.</td></tr><?php endif ?>
+</tbody></table></div></section>

@@ -6,6 +6,7 @@ $router->get('/students', [Learning::class, 'students'], true);
 $router->get('/students/{id}', [Learning::class, 'student'], true);
 $router->get('/classes/{id}/batches', [Learning::class, 'batches'], true);
 $router->get('/batches/{id}', [Learning::class, 'batch'], true);
+$router->get('/invoices/{id}/payments', [Learning::class, 'payments'], true);
 $router->get('/finance', [Learning::class, 'finance'], true);
 $router->post('/learning/{entity}', [Learning::class, 'save'], true);
 $router->get('/login', [School::class, 'login']);

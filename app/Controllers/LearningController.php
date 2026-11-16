@@ -48,6 +48,18 @@ final class LearningController extends Controller
         $invoices=DB::fetchAll('SELECT i.*,s.name,s.phone,e.is_foc,COALESCE(p.paid,0) paid FROM invoices i JOIN enrollments e ON e.id=i.enrollment_id JOIN students s ON s.id=i.student_id LEFT JOIN (SELECT invoice_id,SUM(amount) paid FROM payments GROUP BY invoice_id)p ON p.invoice_id=i.id WHERE e.batch_id=? ORDER BY i.id DESC',[(int)$id]);
         view('batch-detail',compact('batch','enrollments','available','invoices')+['page'=>'classes','title'=>$batch['class_name'].' / '.$batch['name']]);
     }
+    public function payments(string $id): void {
+        if (!preg_match('/^[1-9][0-9]{0,9}$/D',$id)) { $this->missing(); return; }
+        $invoice=DB::fetch('SELECT i.*,s.name,s.phone,COALESCE(e.is_foc,0) is_foc,e.enrolled_on FROM invoices i JOIN students s ON s.id=i.student_id LEFT JOIN enrollments e ON e.id=i.enrollment_id WHERE i.id=?',[(int)$id]);
+        if (!$invoice) { $this->missing(); return; }
+        $payments=DB::fetchAll('SELECT * FROM payments WHERE invoice_id=? ORDER BY paid_on,id',[(int)$id]);
+        $paidCents=array_sum(array_map(fn($p)=>(int)round((float)$p['amount']*100),$payments));
+        $balanceCents=(int)round((float)$invoice['amount']*100)-$paidCents;
+        $paymentToken=bin2hex(random_bytes(24));
+        $_SESSION['payment_tokens'][$paymentToken]=(int)$id;
+        $_SESSION['payment_tokens']=array_slice($_SESSION['payment_tokens'],-50,null,true);
+        view('payments',compact('invoice','payments','paidCents','balanceCents','paymentToken')+['page'=>'fees','title'=>'Fee payments']);
+    }
     public function finance(): void {
         $from=is_string($_GET['from']??null)?$_GET['from']:'';
         $to=is_string($_GET['to']??null)?$_GET['to']:'';
@@ -63,7 +75,7 @@ final class LearningController extends Controller
     private function date(mixed $value): bool { if (!is_string($value)) return false; $date=\DateTimeImmutable::createFromFormat('!Y-m-d',$value); return $date && $date->format('Y-m-d')===$value; }
     private function amount(mixed $value,bool $zero=false): bool { return is_scalar($value) && preg_match('/^\d{1,10}(\.\d{1,2})?$/D',(string)$value) && ($zero || (float)$value>0); }
     public function save(string $entity): void {
-        $path=match($entity) { 'batch'=>'classes/'.(int)($_POST['class_id']??0).'/batches', 'enrollment','enrollment-status'=>'batches/'.(int)($_POST['batch_id']??0), 'finance'=>'finance', default=>'' };
+        $path=match($entity) { 'batch'=>'classes/'.(int)($_POST['class_id']??0).'/batches', 'enrollment','enrollment-status'=>'batches/'.(int)($_POST['batch_id']??0), 'payment'=>'invoices/'.(int)($_POST['invoice_id']??0).'/payments', 'finance'=>'finance', default=>'' };
         if (!$path) { $this->missing(); return; }
         try {
             if ($entity==='batch') {
@@ -90,14 +102,33 @@ final class LearningController extends Controller
                     if (DB::fetchValue("SELECT COUNT(*) FROM enrollments WHERE batch_id=? AND status='Active'",[$b['id']]) >= $b['capacity']) throw new \InvalidArgumentException('This batch is full.');
                     // FOC overrides the posted fee on the server, even if the browser sends a nonzero amount.
                     $amount=(string)$foc==='1'?'0':($_POST['amount']??$b['fee']);
-                    if (!$this->amount($amount,true)) throw new \InvalidArgumentException('Enter a non-negative received amount with at most two decimal places.');
+                    if (!$this->amount($amount,true)) throw new \InvalidArgumentException('Enter a non-negative total fee with at most two decimal places.');
                     $isFoc=(int)round((float)$amount*100)===0;
+                    $deposit=$isFoc?'0':($_POST['deposit']??$amount);
+                    if (!$this->amount($deposit,true) || (int)round((float)$deposit*100)>(int)round((float)$amount*100)) throw new \InvalidArgumentException('Deposit must be between zero and the total fee, with at most two decimal places.');
+                    $dueDate=$_POST['due_date']??$d['enrolled_on'];
+                    if (!$this->date($dueDate) || $dueDate<$d['enrolled_on']) throw new \InvalidArgumentException('Payment due date must be on or after enrollment.');
                     $method=$_POST['method']??'Cash';
-                    if (!$isFoc && (!is_string($method) || !in_array($method,['Cash','Bank transfer','Mobile payment'],true))) throw new \InvalidArgumentException('Choose a valid payment method.');
+                    if ((float)$deposit>0 && (!is_string($method) || !in_array($method,['Cash','Bank transfer','Mobile payment'],true))) throw new \InvalidArgumentException('Choose a valid payment method.');
                     $eid=DB::insert('enrollments',['batch_id'=>$b['id'],'student_id'=>$s['id'],'enrolled_on'=>$d['enrolled_on'],'status'=>'Active','is_foc'=>(int)$isFoc]);
-                    $invoice=DB::insert('invoices',['student_id'=>$s['id'],'enrollment_id'=>$eid,'description'=>$b['class_name'].' / '.$b['name'],'amount'=>$amount,'due_date'=>$d['enrolled_on']]);
-                    if (!$isFoc) DB::insert('payments',['invoice_id'=>$invoice,'amount'=>$amount,'paid_on'=>$d['enrolled_on'],'method'=>$method]);
+                    $invoice=DB::insert('invoices',['student_id'=>$s['id'],'enrollment_id'=>$eid,'description'=>$b['class_name'].' / '.$b['name'],'amount'=>$amount,'due_date'=>$dueDate]);
+                    if ((float)$deposit>0) DB::insert('payments',['invoice_id'=>$invoice,'amount'=>$deposit,'paid_on'=>$d['enrolled_on'],'method'=>$method]);
                 });
+            } elseif ($entity==='payment') {
+                $d=$this->validate(['invoice_id'=>'required|integer','amount'=>'required','paid_on'=>'required','method'=>'required','payment_token'=>'required']);
+                if (($_SESSION['payment_tokens'][$d['payment_token']]??null)!==(int)$d['invoice_id']) throw new \InvalidArgumentException('This payment form has expired or was already submitted. Review the payment history before trying again.');
+                if (!$this->amount($d['amount']) || !$this->date($d['paid_on']) || $d['paid_on']>date('Y-m-d') || !in_array($d['method'],['Cash','Bank transfer','Mobile payment'],true)) throw new \InvalidArgumentException('Enter a positive payment, a valid method, and today or an earlier date.');
+                DB::transaction(function() use($d) {
+                    // Serialize installments against this invoice so simultaneous payments cannot overpay it.
+                    $invoice=DB::fetch('SELECT i.*,e.enrolled_on,COALESCE(e.is_foc,0) is_foc FROM invoices i LEFT JOIN enrollments e ON e.id=i.enrollment_id WHERE i.id=? FOR UPDATE',[$d['invoice_id']]);
+                    if (!$invoice || $invoice['is_foc']) throw new \InvalidArgumentException('Choose an existing, non-FOC invoice.');
+                    if ($invoice['enrolled_on'] && $d['paid_on']<$invoice['enrolled_on']) throw new \InvalidArgumentException('Payment date cannot be before enrollment.');
+                    $paid=DB::fetchValue('SELECT COALESCE(SUM(amount),0) FROM payments WHERE invoice_id=?',[$invoice['id']]);
+                    $balance=(int)round((float)$invoice['amount']*100)-(int)round((float)$paid*100);
+                    if ((int)round((float)$d['amount']*100)>$balance) throw new \InvalidArgumentException('Payment cannot exceed the remaining balance. Review the latest payment history.');
+                    DB::insert('payments',array_intersect_key($d,array_flip(['invoice_id','amount','paid_on','method'])));
+                });
+                unset($_SESSION['payment_tokens'][$d['payment_token']]);
             } elseif ($entity==='enrollment-status') {
                 $d=$this->validate(['id'=>'required|integer','batch_id'=>'required|integer','status'=>'required']);
                 if (!in_array($d['status'],['Active','Completed','Withdrawn'])) throw new \InvalidArgumentException('Choose a valid enrollment status.');
@@ -113,7 +144,13 @@ final class LearningController extends Controller
                 if (!in_array($d['type'],['Income','Expense']) || !$this->amount($d['amount']) || !$this->date($d['occurred_on']) || $d['occurred_on']>date('Y-m-d')) throw new \InvalidArgumentException('Enter a positive amount, valid type, and today or an earlier date.');
                 DB::insert('finance_entries',$d);
             }
-        } catch (\InvalidArgumentException $e) { redirect($path,$e->getMessage(),'error'); }
+        } catch (\InvalidArgumentException $e) {
+            if (in_array($entity,['enrollment','payment'],true)) {
+                $_SESSION['old']=array_filter($_POST,fn($v,$k)=>is_scalar($v) && !in_array($k,['_token','payment_token'],true),ARRAY_FILTER_USE_BOTH);
+                if ($entity==='enrollment') $_SESSION['old']['is_foc']=$_POST['is_foc']??'0';
+            }
+            redirect($path,$e->getMessage(),'error');
+        }
         catch (\PDOException $e) { if (in_array($e->getCode(),['23000','22001','22003'])) redirect($path,'Duplicate enrollment or batch, invalid selection, or a value is too long.','error'); throw $e; }
         unset($_SESSION['old']); redirect($path,'Changes saved successfully.');
     }

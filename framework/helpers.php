@@ -26,7 +26,10 @@ function url(string $path = ''): string
 
 function asset(string $path): string
 {
-    return base_url('assets/' . ltrim($path, '/'));
+    $path = ltrim($path, '/');
+    $file = BASE_PATH . '/public/assets/' . $path;
+    $version = is_file($file) ? '?v=' . substr(hash_file('sha256', $file), 0, 12) : '';
+    return base_url('assets/' . $path) . $version;
 }
 
 function e(mixed $value): string

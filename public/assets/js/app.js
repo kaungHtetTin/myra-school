@@ -6,23 +6,61 @@ document.querySelectorAll('dialog').forEach(dialog => {
 });
 document.querySelectorAll('[data-confirm]').forEach(form => form.addEventListener('submit', event => { if (!confirm(form.dataset.confirm)) event.preventDefault(); }));
 document.querySelector('[data-menu]')?.addEventListener('click', () => document.querySelector('.sidebar').classList.toggle('is-open'));
-document.querySelectorAll('input[type="number"]').forEach(input => { input.min = '0'; input.step = ['amount','fee'].includes(input.name) ? '0.01' : '1'; });
+document.querySelectorAll('input[type="number"]').forEach(input => { if (!input.hasAttribute('min')) input.min = '0'; input.step = ['amount','fee','deposit'].includes(input.name) ? '0.01' : '1'; });
+
+document.querySelectorAll('[data-enrollment-status]').forEach(form => {
+    const select = form.querySelector('[name="status"]');
+    const actions = form.querySelector('.enrollment-status-actions');
+    const cancel = form.querySelector('[type="reset"]');
+    const initialStatus = select.value;
+    function syncStatus() {
+        const changed = select.value !== initialStatus;
+        select.dataset.currentStatus = select.value;
+        actions.hidden = !changed;
+        cancel.hidden = !changed;
+    }
+    select.addEventListener('change', syncStatus);
+    form.addEventListener('reset', () => {
+        select.value = initialStatus;
+        syncStatus();
+        select.focus();
+    });
+    form.addEventListener('submit', event => {
+        if (select.value === initialStatus) event.preventDefault();
+    });
+    window.addEventListener('pageshow', syncStatus);
+    syncStatus();
+});
 
 document.querySelectorAll('[data-enrollment-form]').forEach(form => {
     const foc = form.querySelector('[name="is_foc"]');
     const amount = form.querySelector('[name="amount"]');
+    const deposit = form.querySelector('[name="deposit"]');
     const method = form.querySelector('[name="method"]');
     let paidAmount = amount.value;
+    let initialPayment = deposit?.value;
     function syncFoc() {
         if (foc.checked) {
             if (!amount.disabled) paidAmount = amount.value;
             amount.value = '0';
+            if (deposit && !deposit.disabled) { initialPayment = deposit.value; deposit.value = '0'; }
         } else if (amount.disabled) amount.value = paidAmount;
+        if (deposit) {
+            if (!foc.checked && deposit.disabled) deposit.value = initialPayment;
+            deposit.disabled = foc.checked;
+            deposit.max = amount.value;
+        }
         amount.disabled = foc.checked;
         method.disabled = foc.checked;
     }
     foc.addEventListener('change', syncFoc);
-    form.addEventListener('reset', () => setTimeout(() => { amount.disabled = false; paidAmount = amount.value; syncFoc(); }, 0));
+    amount.addEventListener('input', () => { if (deposit) deposit.max = amount.value; });
+    form.addEventListener('reset', () => setTimeout(() => {
+        amount.disabled = false;
+        paidAmount = amount.value;
+        if (deposit) { deposit.disabled = false; initialPayment = deposit.value; }
+        syncFoc();
+    }, 0));
     syncFoc();
 });
 document.querySelectorAll('[data-branding-upload]').forEach(input => {
